@@ -1,7 +1,121 @@
 import sqlite3
 
+
+GROUPS_TABLE_SQL = """
+CREATE TABLE IF NOT EXISTS groups (
+    group_id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT,
+    UNIQUE(name)
+)
+"""
+
+
+DATAS_TABLE_SQL = """
+CREATE TABLE IF NOT EXISTS datas (
+    data_id INTEGER PRIMARY KEY AUTOINCREMENT,
+    group_id INTEGER,
+    name TEXT,
+    data BLOB,
+    UNIQUE(group_id, name),
+    foreign key (group_id) references groups(group_id)
+)
+"""
+
+
+class DB:
+    def __init__(self, path):
+        self.conn = sqlite3.connect(path)
+        self.ensure_tables()
+
+    def ensure_tables(self):
+        with self.conn:
+            self.conn.execute(GROUPS_TABLE_SQL)
+            self.conn.execute(DATAS_TABLE_SQL)
+
+    def is_exists_group(self, group_id):
+        exists = self.conn.execute("SELECT 1 from groups WHERE name = ?;", (group_id,)).fetchone()
+        return not (exists is None)
+
+    def is_exists_data(self, group_id, data_name):
+        exists = self.conn.execute("SELECT 1 FROM datas WHERE group_id = ? AND name = ?;", (group_id, data_name)).fetchone()
+        return not (exists is None)
+    
+    def iter_group_names(self):
+        for row in self.conn.execute("SELECT name FROM groups"):
+            yield row[0]
+    
+    def iter_group_data_names(self, group_name):
+        for row in self.conn.execute("SELECT name FROM datas WHERE group_id IN (SELECT group_id FROM groups WHERE name = ?)", (group_name,)):
+            yield row[0]
+
+    def _get_data_rowid(self, group_name, data_name):
+        result = self.conn.execute("SELECT rowid FROM datas WHERE group_id IN (SELECT group_id FROM groups WHERE name = ?) AND name = ?;", (group_name, data_name)).fetchone()
+        if not result:
+            return
+        return result[0]
+
+    def get_data(self, group_name, data_name):
+        rowid = self._get_data_rowid(group_name, data_name)
+        if not rowid:
+            return
+
+        return self.conn.blobopen("datas", "data", rowid)
+    
+    def write_data(self, group_name, data_name, data, offset=0):
+        with self.conn as conn:
+            old = self.get_data(group_name, data_name).read()
+
+            size = offset + len(data)
+            conn.execute("UPDATE datas SET data = zeroblob(?) WHERE group_id IN (SELECT group_id FROM groups WHERE name = ?) AND name = ?;", (size, group_name, data_name))
+
+            rowid = self._get_data_rowid(group_name, data_name)
+            if not rowid:
+                return
+
+            with conn.blobopen("datas", "data", rowid) as blob:
+                blob.write(old)
+                blob[offset:] = data
+
+    def create_group(self, group_name):
+        with self.conn as conn:
+            conn.execute("INSERT INTO groups(name) VALUES(?);", (group_name,))
+
+    def create_data(self, group_name, data_name):
+        with self.conn as conn:
+            conn.execute("INSERT INTO datas(group_id, name, data) VALUES((SELECT group_id FROM groups WHERE name = ?), ?, zeroblob(0));", (group_name, data_name))
+
+
+db = DB(":memory:")
+db.create_group("test")
+db.create_data("test", "test")
+db.write_data("test", "test", b'{"a": 100')
+db.write_data("test", "test", b', "b": 200}', 9)
+print(list(db.iter_group_names()))
+print(list(db.iter_group_data_names("test")))
+print(db.get_data("test", "test").read())
+print(db.conn.execute("SELECT json_extract(data, '$.b') FROM datas;").fetchall())
+breakpoint()
+"""
+
+
+def _split_data_path(path):
+    head, tail = os.path.split(path)
+    if head == "/":
+        if not tail:
+            return None, None
+        return tail, None
+
+    head2, tail2 = os.path.split(head)
+    if head2 == "/":
+        if not tail2:
+            return None, None
+        return tail2, tail
+
+    return None, None
+
+import sqlite3
+
 def init():
-    con = sqlite3.connect("data.db")
     cur = con.cursor()
     cur.execute("CREATE TABLE IF NOT EXISTS meta(id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT, UNIQUE(name))")
     cur.execute("CREATE TABLE IF NOT EXISTS filea(id INTEGER, col1 TEXT, col2 INTEGER)")
@@ -31,58 +145,6 @@ class MyStat(fuse.Stat):
         self.st_mtime = 0
         self.st_ctime = 0
 
-
-def _split_data_path(path):
-    head, tail = os.path.split(path)
-    if head == "/":
-        if not tail:
-            return None, None
-        return tail, None
-
-    head2, tail2 = os.path.split(head)
-    if head2 == "/":
-        if not tail2:
-            return None, None
-        return tail2, tail
-
-    return None, None
-
-
-def _is_exists_exp(cur, expid):
-    exp_exists = cur.execute(f"SELECT 1 from meta where name = '{expid}';").fetchone()
-    return not (exp_exists is None)
-
-
-def _is_exists_exp_file(cur, expid, filename):
-    table_exists = cur.execute(f"SELECT 1 FROM sqlite_master WHERE type='table' AND name='{filename}';").fetchone()
-    return not (table_exists is None)
-
-
-def _iter_exp_names(cur):
-    for row in cur.execute("SELECT name FROM meta"):
-        yield row[0]
-
-
-def _iter_exp_filenames(cur, expid):
-    for row in cur.execute(f"SELECT name FROM sqlite_master WHERE type='table' AND name != 'meta' AND name != 'sqlite_sequence';"):
-        yield row[0]
-
-def _get_filedata(cur, expid, filename):
-    data = cur.execute(f"SELECT data FROM {filename} WHERE expid IN (SELECT id FROM meta WHERE name = '{expid}');").fetchone()
-    return data[0]
-
-
-def _get_filedata_len(cur, expid, filename):
-    row = cur.execute(f"SELECT length(data) FROM {filename} WHERE expid IN (SELECT id FROM meta WHERE name = '{expid}');").fetchone()
-    return row[0]
-
-def _clear_filedata(cur, expid, filename):
-    return cur.execute(f"UPDATE aaaa SET data = ? WHERE expid IN (SELECT id FROM meta WHERE name = ?);", ("", expid))
-
-def _set_filedata(cur, expid, filename, offset, blob):
-    data = bytearray(_get_filedata(cur, expid, filename).encode())
-    data[offset:] = blob
-    return cur.execute(f"UPDATE aaaa SET data = ? WHERE expid IN (SELECT id FROM meta WHERE name = ?);", (data.decode(), expid))
 
 class HelloFS(Fuse):
     def __init__(self, dbpath, *args, **kwargs):
@@ -191,10 +253,7 @@ class HelloFS(Fuse):
 
 
 def main():
-    usage="""
-Userspace hello example
-
-""" + Fuse.fusage
+    usage="Userspace hello example" + Fuse.fusage
     server = HelloFS("data.db", version="%prog " + fuse.__version__,
                      usage=usage,
                      dash_s_do='setsingle')
@@ -204,4 +263,4 @@ Userspace hello example
 
 if __name__ == '__main__':
     main()
-
+"""
