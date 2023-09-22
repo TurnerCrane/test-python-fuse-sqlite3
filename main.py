@@ -134,6 +134,11 @@ class DBFS(Fuse):
         print(f"create: path={path}, flags={flags}, mode={mode}, group={group_name}, data={data_name}")
         self.db.create_data(group_name, data_name)
 
+    def mkdir(self, path, mode):
+        group_name, data_name = _split_data_path(path)
+        print(f"create: path={path}, mode={mode}, group={group_name}, data={data_name}")
+        self.db.create_group(group_name)
+
 
 def main():
     usage="DBFS" + Fuse.fusage
