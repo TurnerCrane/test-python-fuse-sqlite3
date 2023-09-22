@@ -129,6 +129,11 @@ class DBFS(Fuse):
         print(f"truncate: path={path}, size={size}, group={group_name}, data={data_name}")
         self.db.clear_data(group_name, data_name)
 
+    def create(self, path, flags, mode):
+        group_name, data_name = _split_data_path(path)
+        print(f"create: path={path}, flags={flags}, mode={mode}, group={group_name}, data={data_name}")
+        self.db.create_data(group_name, data_name)
+
 
 def main():
     usage="DBFS" + Fuse.fusage
