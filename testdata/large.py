@@ -3,7 +3,7 @@ from db import DB
 
 db = DB("data.db")
 
-with open("generated2.json") as f:
+with open("testdata/generated.json") as f:
     data_list = json.load(f)
     print(f"loading {len(data_list)} datas")
     for data in data_list:
