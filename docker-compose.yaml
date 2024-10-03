@@ -1,7 +1,19 @@
-version: '3'
 services:
   dbfs:
     image: dbfs:latest
     build:
       context: .
       dockerfile: ./docker/Dockerfile
+    volumes:
+      - ./main.py:/app/main.py
+      - ./db.py:/app/db.py
+      - ./testdata:/app/testdata
+      - ./data.db:/app/data.db
+    environment:
+      - MOUNT_POINT=/mnt
+    devices:
+      - /dev/fuse
+    cap_add:
+      - SYS_ADMIN
+    security_opt:
+      - apparmor:unconfined
