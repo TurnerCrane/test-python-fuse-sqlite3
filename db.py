@@ -234,12 +234,18 @@ class DB:
         # else:
         #     return None, None, None
 
-    def update_timestamps(self, group_name, data_name, atime=None, mtime=None, ctime=None):
+    def update_timestamps(self, group_name, data_name, timestamp):
         rowid = self._get_data_rowid(group_name, data_name)
         if rowid is None:
             return None
 
         with self.conn as conn:
+            if timestamp:
+                atime = timestamp.get('atime', None)
+                mtime = timestamp.get('mtime', None)
+                ctime = timestamp.get('ctime', None)
+            else:
+                None
             if atime is not None:
                 conn.execute(
                     """
@@ -270,7 +276,8 @@ if __name__ == '__main__':
     print(list(db.iter_group_data_names("test")))
     print(db.get_data("test", "test").read())
     print(db.conn.execute(
-            "SELECT json_extract(data, '$.b') FROM datas;"
-            ).fetchall()
+        """
+        "SELECT json_extract(data, '$.b') FROM datas;
+        """).fetchall()
     )
     breakpoint()

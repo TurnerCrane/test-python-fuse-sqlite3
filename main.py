@@ -11,7 +11,10 @@ from db import DB
 
 
 fuse.fuse_python_api = (0, 2)
-logging.basicConfig(filename='/app/app.log', level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
+logging.basicConfig(
+    filename='/app/app.log',
+    level=logging.DEBUG,
+    format='%(asctime)s - %(levelname)s - %(message)s')
 
 
 class Stat(fuse.Stat):
@@ -53,7 +56,9 @@ class DBFS(Fuse):
 
     def getattr(self, path):
         group_name, data_name = _split_data_path(path)
-        logging.info(f"getattr: path={path}, group={group_name}, data={data_name}")
+        logging.info(
+            f"getattr: path={path}, group={group_name}, data={data_name}"
+        )
 
         # request '/' attr
         if group_name is None and data_name is None:
@@ -72,8 +77,6 @@ class DBFS(Fuse):
                 return -errno.ENOENT
 
             row = self.db.get_data_owner(group_name, data_name)
-            # row = self.db.conn.execute("SELECT gid, uid FROM datas WHERE group_id IN (SELECT group_id FROM groups WHERE name = ?) AND name = ?;",(group_name, data_name)).fetchone()
-            # loggin.debug(f"getattr: row={row}")
 
             if row:
                 gid, uid = row
@@ -89,22 +92,53 @@ class DBFS(Fuse):
                 atime, mtime, ctime = timestamp
             else:
                 atime, mtime, ctime = (None, None, None)
-            # atime, mtime, ctime = self.db.get_timestamps(group_name, data_name)
-            logging.debug(f"getattr: atime={atime}, mtime={mtime}, ctime={ctime}")
+
+            logging.debug(
+                f"getattr: atime={atime}, mtime={mtime}, ctime={ctime}"
+            )
 
             # FIXME(なんか複雑)
             if atime is None or mtime is None or ctime is None:
                 now = time.time()
-                self.db.update_timestamps(group_name, data_name, atime=now, mtime=now, ctime=now)
-                return Stat(st_mode=(stat.S_IFREG | mode), st_nlink=1, st_size=size, st_gid=gid, st_uid=uid, st_atime=now, st_mtime=now, st_ctime=now)
+                self.db.update_timestamps(
+                    group_name,
+                    data_name,
+                    {
+                        "atime": time.time(),
+                        "mtime": time.time(),
+                        "ctime": time.time()
+                    }
+                )
+                return Stat(
+                    st_mode=(stat.S_IFREG | mode),
+                    st_nlink=1,
+                    st_size=size,
+                    st_gid=gid,
+                    st_uid=uid,
+                    st_atime=now,
+                    st_mtime=now,
+                    st_ctime=now
+                    )
             else:
-                return Stat(st_mode=(stat.S_IFREG | mode), st_nlink=1, st_size=size, st_gid=gid, st_uid=uid, st_atime=atime, st_mtime=mtime, st_ctime=ctime)
+                return Stat(
+                    st_mode=(stat.S_IFREG | mode),
+                    st_nlink=1,
+                    st_size=size,
+                    st_gid=gid,
+                    st_uid=uid,
+                    st_atime=atime,
+                    st_mtime=mtime,
+                    st_ctime=ctime
+                    )
         else:
             return -errno.ENOENT
 
     def readdir(self, path, offset):
         group_name, data_name = _split_data_path(path)
-        logging.info(f"readdir: path={path}, offset={offset}, group={group_name}, data={data_name}")
+        logging.info(
+            f"readdir: path={path}, offset={offset}, "
+            f"group={group_name}, data={data_name}"
+        )
 
         for r in ['.', '..']:
             yield fuse.Direntry(r)
@@ -121,7 +155,10 @@ class DBFS(Fuse):
 
     def open(self, path, flags):
         group_name, data_name = _split_data_path(path)
-        logging.info(f"open: path={path}, flags={flags}, group={group_name}, data={data_name}")
+        logging.info(
+            f"open: path={path}, flags={flags}, "
+            f"group={group_name}, data={data_name}"
+        )
 
         if group_name and not self.db.is_exists_group(group_name):
             return -errno.ENOENT
@@ -131,7 +168,10 @@ class DBFS(Fuse):
 
     def read(self, path, size, offset):
         group_name, data_name = _split_data_path(path)
-        logging.info(f"read: path={path}, size={size}, offset={offset}, group={group_name}, data={data_name}")
+        logging.info(
+            f"read: path={path}, size={size}, offset={offset}, "
+            f"group={group_name}, data={data_name}"
+        )
 
         data = self.db.get_data(group_name, data_name)
         datalen = len(data)
@@ -147,33 +187,55 @@ class DBFS(Fuse):
 
     def write(self, path, buf, offset):
         group_name, data_name = _split_data_path(path)
-        logging.info(f"write: path={path}, buf=({len(buf)}), offset={offset}, group={group_name}, data={data_name}")
+        logging.info(
+            f"write: path={path}, buf=({len(buf)}), "
+            f"offset={offset}, group={group_name}, data={data_name}"
+        )
 
         self.db.write_data(group_name, data_name, buf, offset=offset)
 
-        now = time.time()
-        self.db.update_timestamps(group_name, data_name, mtime=now)
+        self.db.update_timestamps(
+            group_name,
+            data_name,
+            {"mtime": time.time()}
+        )
 
         return len(buf)
 
     def truncate(self, path, size):
         group_name, data_name = _split_data_path(path)
-        logging.info(f"truncate: path={path}, size={size}, group={group_name}, data={data_name}")
+        logging.info(
+            f"truncate: path={path}, size={size}, "
+            f"group={group_name}, data={data_name}"
+        )
         # FIXME(viで変更するとファイルサイズがおかしい)
         # self.db.clear_data(group_name, data_name)
 
     def create(self, path, flags, mode):
         group_name, data_name = _split_data_path(path)
-        logging.info(f"create: path={path}, flags={flags}, mode={mode}, group={group_name}, data={data_name}")
+        logging.info(
+            f"create: path={path}, flags={flags}, "
+            f"mode={mode}, group={group_name}, data={data_name}"
+        )
 
         self.db.create_data(group_name, data_name)
 
-        now = time.time()
-        self.db.update_timestamps(group_name, data_name, atime=now, mtime=now, ctime=now)
+        self.db.update_timestamps(
+            group_name,
+            data_name,
+            {
+                "atime": time.time(),
+                "mtime": time.time(),
+                "ctime": time.time()
+            }
+        )
 
     def mkdir(self, path, mode):
         group_name, data_name = _split_data_path(path)
-        logging.info(f"mkdir: path={path}, mode={mode}, group={group_name}, data={data_name}")
+        logging.info(
+            f"mkdir: path={path}, mode={mode}, "
+            f"group={group_name}, data={data_name}"
+        )
 
         self.db.create_group(group_name)
 
@@ -184,31 +246,53 @@ class DBFS(Fuse):
 
     def unlink(self, path):
         group_name, data_name = _split_data_path(path)
-        logging.info(f"unlink: path={path}, group={group_name}, data={data_name}")
+        logging.info(
+            f"unlink: path={path}, group={group_name}, "
+            f"data={data_name}")
         self.db.delete_data(group_name, data_name)
 
     def chmod(self, path, mode):
         group_name, data_name = _split_data_path(path)
-        logging.info(f"chmod: path={path}, mode={mode}, group={group_name}, data={data_name}")
+        logging.info(
+            f"chmod: path={path}, mode={mode}, "
+            f"group={group_name}, data={data_name}"
+        )
 
         if data_name:
             self.db.set_data_permissions(group_name, data_name, mode)
-            self.db.update_timestamps(group_name, data_name, ctime=time.time())
-            logging.debug(f"chmod: permissions changed for {data_name} in group {group_name} to {mode}")
+            self.db.update_timestamps(
+                group_name,
+                data_name,
+                {"ctime": time.time()}
+            )
+            logging.debug(
+                f"chmod: permissions changed for {data_name} "
+                f"in group {group_name} to {mode}"
+            )
         else:
-            logging.warning(f"chmod: permission change for directory {group_name} is not allowed")
+            logging.warning(
+                f"chmod: permission change for directory {group_name} "
+                f"is not allowed")
             return -errno.EPERM
 
     def chown(self, path, gid, uid):
         group_name, data_name = _split_data_path(path)
-        logging.info(f"chown: path={path}, gid={gid}, uid={uid}, group={group_name}, data={data_name}")
+        logging.info(
+            f"chown: path={path}, gid={gid}, uid={uid}, "
+            f"group={group_name}, data={data_name}"
+        )
 
         if data_name and self.db.is_exists_data(group_name, data_name):
-            # if not self.db.set_data_owner(group_name, data_name, gid, uid):
-            #     return -errno.ENOENT
             self.db.set_data_owner(group_name, data_name, gid, uid)
-            self.db.update_timestamps(group_name, data_name, ctime=time.time())
-            logging.info(f"chown: Owners changed for {data_name} in group {group_name} to {gid}:{uid}")
+            self.db.update_timestamps(
+                group_name,
+                data_name,
+                {"ctime": time.time()}
+            )
+            logging.info(
+                f"chown: Owners changed for {data_name} "
+                f"in group {group_name} to {gid}:{uid}"
+            )
         else:
             logging.error(f"chown: {path} does not exist")
             return -errno.EPERM
