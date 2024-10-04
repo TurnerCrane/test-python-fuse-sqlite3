@@ -12,9 +12,10 @@ from db import DB
 
 fuse.fuse_python_api = (0, 2)
 logging.basicConfig(
-    filename='/app/app.log',
+    filename="/app/app.log",
     level=logging.DEBUG,
-    format='%(asctime)s - %(levelname)s - %(message)s')
+    format="%(asctime)s - %(levelname)s - %(message)s",
+)
 
 
 class Stat(fuse.Stat):
@@ -56,9 +57,7 @@ class DBFS(Fuse):
 
     def getattr(self, path):
         group_name, data_name = _split_data_path(path)
-        logging.info(
-            f"getattr: path={path}, group={group_name}, data={data_name}"
-        )
+        logging.info(f"getattr: path={path}, group={group_name}, data={data_name}")
 
         # request '/' attr
         if group_name is None and data_name is None:
@@ -93,9 +92,7 @@ class DBFS(Fuse):
             else:
                 atime, mtime, ctime = (None, None, None)
 
-            logging.debug(
-                f"getattr: atime={atime}, mtime={mtime}, ctime={ctime}"
-            )
+            logging.debug(f"getattr: atime={atime}, mtime={mtime}, ctime={ctime}")
 
             # FIXME(なんか複雑)
             if atime is None or mtime is None or ctime is None:
@@ -103,11 +100,7 @@ class DBFS(Fuse):
                 self.db.update_timestamps(
                     group_name,
                     data_name,
-                    {
-                        "atime": time.time(),
-                        "mtime": time.time(),
-                        "ctime": time.time()
-                    }
+                    {"atime": time.time(), "mtime": time.time(), "ctime": time.time()},
                 )
                 return Stat(
                     st_mode=(stat.S_IFREG | mode),
@@ -117,8 +110,8 @@ class DBFS(Fuse):
                     st_uid=uid,
                     st_atime=now,
                     st_mtime=now,
-                    st_ctime=now
-                    )
+                    st_ctime=now,
+                )
             else:
                 return Stat(
                     st_mode=(stat.S_IFREG | mode),
@@ -128,8 +121,8 @@ class DBFS(Fuse):
                     st_uid=uid,
                     st_atime=atime,
                     st_mtime=mtime,
-                    st_ctime=ctime
-                    )
+                    st_ctime=ctime,
+                )
         else:
             return -errno.ENOENT
 
@@ -140,7 +133,7 @@ class DBFS(Fuse):
             f"group={group_name}, data={data_name}"
         )
 
-        for r in ['.', '..']:
+        for r in [".", ".."]:
             yield fuse.Direntry(r)
 
         # request '/<group_name>'
@@ -179,9 +172,9 @@ class DBFS(Fuse):
         if offset < datalen:
             if offset + size > datalen:
                 size = datalen - offset
-            buf = data[offset:offset+size]
+            buf = data[offset : offset + size]
         else:
-            buf = b''
+            buf = b""
 
         return buf
 
@@ -194,11 +187,7 @@ class DBFS(Fuse):
 
         self.db.write_data(group_name, data_name, buf, offset=offset)
 
-        self.db.update_timestamps(
-            group_name,
-            data_name,
-            {"mtime": time.time()}
-        )
+        self.db.update_timestamps(group_name, data_name, {"mtime": time.time()})
 
         return len(buf)
 
@@ -223,18 +212,13 @@ class DBFS(Fuse):
         self.db.update_timestamps(
             group_name,
             data_name,
-            {
-                "atime": time.time(),
-                "mtime": time.time(),
-                "ctime": time.time()
-            }
+            {"atime": time.time(), "mtime": time.time(), "ctime": time.time()},
         )
 
     def mkdir(self, path, mode):
         group_name, data_name = _split_data_path(path)
         logging.info(
-            f"mkdir: path={path}, mode={mode}, "
-            f"group={group_name}, data={data_name}"
+            f"mkdir: path={path}, mode={mode}, " f"group={group_name}, data={data_name}"
         )
 
         self.db.create_group(group_name)
@@ -246,25 +230,18 @@ class DBFS(Fuse):
 
     def unlink(self, path):
         group_name, data_name = _split_data_path(path)
-        logging.info(
-            f"unlink: path={path}, group={group_name}, "
-            f"data={data_name}")
+        logging.info(f"unlink: path={path}, group={group_name}, " f"data={data_name}")
         self.db.delete_data(group_name, data_name)
 
     def chmod(self, path, mode):
         group_name, data_name = _split_data_path(path)
         logging.info(
-            f"chmod: path={path}, mode={mode}, "
-            f"group={group_name}, data={data_name}"
+            f"chmod: path={path}, mode={mode}, " f"group={group_name}, data={data_name}"
         )
 
         if data_name:
             self.db.set_data_permissions(group_name, data_name, mode)
-            self.db.update_timestamps(
-                group_name,
-                data_name,
-                {"ctime": time.time()}
-            )
+            self.db.update_timestamps(group_name, data_name, {"ctime": time.time()})
             logging.debug(
                 f"chmod: permissions changed for {data_name} "
                 f"in group {group_name} to {mode}"
@@ -272,7 +249,8 @@ class DBFS(Fuse):
         else:
             logging.warning(
                 f"chmod: permission change for directory {group_name} "
-                f"is not allowed")
+                f"is not allowed"
+            )
             return -errno.EPERM
 
     def chown(self, path, gid, uid):
@@ -284,11 +262,7 @@ class DBFS(Fuse):
 
         if data_name and self.db.is_exists_data(group_name, data_name):
             self.db.set_data_owner(group_name, data_name, gid, uid)
-            self.db.update_timestamps(
-                group_name,
-                data_name,
-                {"ctime": time.time()}
-            )
+            self.db.update_timestamps(group_name, data_name, {"ctime": time.time()})
             logging.info(
                 f"chown: Owners changed for {data_name} "
                 f"in group {group_name} to {gid}:{uid}"
@@ -300,14 +274,16 @@ class DBFS(Fuse):
 
 def main():
     usage = "DBFS" + Fuse.fusage
-    server = DBFS("data.db",
-                  version="%prog " + fuse.__version__,
-                  usage=usage,
-                  dash_s_do='setsingle')
+    server = DBFS(
+        "data.db",
+        version="%prog " + fuse.__version__,
+        usage=usage,
+        dash_s_do="setsingle",
+    )
 
     server.parse(errex=1)
     server.main()
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

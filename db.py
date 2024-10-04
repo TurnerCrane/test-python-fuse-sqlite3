@@ -31,7 +31,7 @@ CREATE TABLE IF NOT EXISTS datas (
 
 class DB:
     def __init__(self, path):
-        check_same_thread = (sqlite3.threadsafety != 3)
+        check_same_thread = sqlite3.threadsafety != 3
         self.conn = sqlite3.connect(path, check_same_thread=check_same_thread)
         self.ensure_tables()
 
@@ -44,7 +44,8 @@ class DB:
         exists = self.conn.execute(
             """
             SELECT 1 from groups WHERE name = ?;
-            """, (group_name,)
+            """,
+            (group_name,),
         ).fetchone()
         return not (exists is None)
 
@@ -53,7 +54,8 @@ class DB:
             """
             SELECT 1 FROM datas WHERE group_id IN
             (SELECT group_id FROM groups WHERE name = ?) AND name = ?;
-            """, (group_name, data_name)
+            """,
+            (group_name, data_name),
         ).fetchone()
         return not (exists is None)
 
@@ -66,7 +68,8 @@ class DB:
             """
             SELECT name FROM datas WHERE group_id IN
             (SELECT group_id FROM groups WHERE name = ?)
-            """, (group_name,)
+            """,
+            (group_name,),
         ):
             yield row[0]
 
@@ -75,7 +78,8 @@ class DB:
             """
             SELECT rowid FROM datas WHERE group_id IN
             (SELECT group_id FROM groups WHERE name = ?) AND name = ?;
-            """, (group_name, data_name)
+            """,
+            (group_name, data_name),
         ).fetchone()
         if not result:
             return
@@ -95,7 +99,8 @@ class DB:
         mode = self.conn.execute(
             """
             SELECT mode FROM datas WHERE rowid = ?
-            """, (rowid,)
+            """,
+            (rowid,),
         ).fetchone()
         return mode[0] if mode else None
 
@@ -128,9 +133,7 @@ class DB:
 
             # データを書き込む
             with conn.blobopen("datas", "data", rowid) as blob:
-                blob.write(
-                    old_data[:offset] + data + old_data[offset + len(data):]
-                )
+                blob.write(old_data[:offset] + data + old_data[offset + len(data) :])
 
     def clear_data(self, group_name, data_name, size=0):
         with self.conn as conn:
@@ -138,7 +141,8 @@ class DB:
                 """
                 UPDATE datas SET data = zeroblob(?) WHERE group_id IN
                 (SELECT group_id FROM groups WHERE name = ?) AND name = ?;
-                """, (size, group_name, data_name)
+                """,
+                (size, group_name, data_name),
             )
 
     def create_group(self, group_name):
@@ -146,7 +150,8 @@ class DB:
             conn.execute(
                 """
                 INSERT INTO groups(name) VALUES(?);
-                """, (group_name,)
+                """,
+                (group_name,),
             )
 
     def create_data(self, group_name, data_name, gid=0, uid=0, mode=0o644):
@@ -161,7 +166,8 @@ class DB:
                     (SELECT group_id FROM groups WHERE name = ?),
                     ?, ?, ?, ?, ?, ?, ?, zeroblob(0)
                 );
-                """, (group_name, data_name, gid, uid, mode, now, now, now)
+                """,
+                (group_name, data_name, gid, uid, mode, now, now, now),
             )
 
     def set_data_permissions(self, group_name, data_name, mode):
@@ -173,7 +179,8 @@ class DB:
             conn.execute(
                 """
                 UPDATE datas SET mode = ? WHERE rowid = ?
-                """, (mode, rowid)
+                """,
+                (mode, rowid),
             )
 
     def get_data_owner(self, group_name, data_name):
@@ -184,7 +191,8 @@ class DB:
         row = self.conn.execute(
             """
             SELECT gid, uid FROM datas WHERE rowid = ?
-            """, (rowid, )
+            """,
+            (rowid,),
         ).fetchone()
         return row if row else None
 
@@ -197,7 +205,9 @@ class DB:
             conn.execute(
                 """
                 UPDATE datas SET uid = ?, gid = ? WHERE rowid = ?
-                """, (uid, gid, rowid))
+                """,
+                (uid, gid, rowid),
+            )
 
     def delete_group(self, group_name):
         with self.conn as conn:
@@ -205,7 +215,8 @@ class DB:
                 """
                 DELETE FROM groups WHERE group_id IN
                 (SELECT group_id FROM groups WHERE name = ?);
-                """, (group_name,)
+                """,
+                (group_name,),
             )
 
     def delete_data(self, group_name, data_name):
@@ -214,7 +225,8 @@ class DB:
                 """
                 DELETE FROM datas WHERE group_id IN
                 (SELECT group_id FROM groups WHERE name = ?) AND name = ?;
-                """, (group_name, data_name)
+                """,
+                (group_name, data_name),
             )
 
     def get_timestamps(self, group_name, data_name):
@@ -225,7 +237,8 @@ class DB:
         row = self.conn.execute(
             """
             SELECT atime, mtime, ctime FROM datas WHERE rowid = ?;
-            """, (rowid,)
+            """,
+            (rowid,),
         ).fetchone()
         return row if row else None
         # if result:
@@ -241,32 +254,35 @@ class DB:
 
         with self.conn as conn:
             if timestamp:
-                atime = timestamp.get('atime', None)
-                mtime = timestamp.get('mtime', None)
-                ctime = timestamp.get('ctime', None)
+                atime = timestamp.get("atime", None)
+                mtime = timestamp.get("mtime", None)
+                ctime = timestamp.get("ctime", None)
             else:
                 None
             if atime is not None:
                 conn.execute(
                     """
                     UPDATE datas SET atime = ? WHERE rowid = ?
-                    """, (atime, rowid)
+                    """,
+                    (atime, rowid),
                 )
             if mtime is not None:
                 conn.execute(
                     """
                     UPDATE datas SET mtime = ? WHERE rowid = ?
-                    """, (mtime, rowid)
+                    """,
+                    (mtime, rowid),
                 )
             if ctime is not None:
                 conn.execute(
                     """
                     UPDATE datas SET ctime = ? WHERE rowid = ?
-                    """, (ctime, rowid)
+                    """,
+                    (ctime, rowid),
                 )
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     db = DB(":memory:")
     db.create_group("test")
     db.create_data("test", "test")
@@ -275,9 +291,11 @@ if __name__ == '__main__':
     print(list(db.iter_group_names()))
     print(list(db.iter_group_data_names("test")))
     print(db.get_data("test", "test").read())
-    print(db.conn.execute(
-        """
+    print(
+        db.conn.execute(
+            """
         "SELECT json_extract(data, '$.b') FROM datas;
-        """).fetchall()
+        """
+        ).fetchall()
     )
     breakpoint()
